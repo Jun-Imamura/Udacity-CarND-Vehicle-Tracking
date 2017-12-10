@@ -1103,7 +1103,7 @@ Then, I did normalization. Below figure is the example feature vector for one im
 <h3 id="2-filter-for-false-positives-and-duplicated-detections"><a name="user-content-2-filter-for-false-positives-and-duplicated-detections" href="#2-filter-for-false-positives-and-duplicated-detections" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>2. Filter for False Positives and Duplicated Detections</h3>
 <p>I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used <code>scipy.ndimage.measurements.label()</code> to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  </p>
 <p>Here&rsquo;s an example result showing the heatmap from a series of frames of video, the result of <code>scipy.ndimage.measurements.label()</code> and the bounding boxes then overlaid on the last frame of video:</p>
-<p>Here&rsquo;s a <a href="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/project_video.mp4">link to my video result</a></p>
+<p>Here&rsquo;s a <a href="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output.mp4">link to my video result</a></p>
 <hr />
 <h3 id="discussion"><a name="user-content-discussion" href="#discussion" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Discussion</h3>
 <p>Now the problem is:</p>
