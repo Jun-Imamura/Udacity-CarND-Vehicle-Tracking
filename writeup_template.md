@@ -12,9 +12,10 @@
 [image1]: ./output_images/Car_NotCar.png
 [image2]: ./output_images/HOG.png
 [image3]: ./output_images/features.png
-[image4]: ./output_images/DetectionResult.png
-[image5]: ./output_images/heatmap.png
-[image6]: ./output_images/final_res.png
+[image4]: ./output_images/sliding_window.png
+[image5]: ./output_images/DetectionResult.png
+[image6]: ./output_images/heatmap.png
+[image7]: ./output_images/final_res.png
 [video1]: ./project_video.mp4
 
 Here is the [Rubric](https://review.udacity.com/#!/rubrics/513/view) points for this project.
@@ -40,13 +41,16 @@ Here is an example using the `YCrCb` color space and HOG parameters of `orientat
 ***
 
 ### 2. Final choice of HOG parameters.
-I chose following HOG parameters
+I tried some combination of these parameters, and decided to use followings:
+Color space was chosen by comparing SVN test set error.
 
 ```
-orient = 9
+orient = 10
 pix_per_cell = 8
 cell_per_block = 2
+color_space = 'HSV'
 ```
+
 
 ***
 
@@ -57,19 +61,27 @@ Then, I did normalization. Below figure is the example feature vector for one im
 
 ![alt text][image3]
 
+When I applied SVM with default parameter, train accuracy was 1.0, which seems overfitting. So I decided to reduce the parameter `C` to avoid this (the parameter is related to decision boundary shape). And the parameter `C=0.00003` seems good to balance between train error and test error.
+
 ***
 
 ## Sliding Window Search
 
 ### 1. Sliding Window Search Algorithm and Parameter Exploration
-I scaled input image to $1/1.5$, for optimization. And window size is fixed to 64.
+I used multi-scale window sliding, with scaling image and fixed window size.
+ROI is also chosen along with the scale size, because the vehicle in far region is captured upper (close to vanishing point) in the image plane.
 
+```
+scales = [1.0, 1.5, 2.0]
+yranges = [(400, 500),(400, 550), (400, 600)]
+```
+
+![alt text][image4]
 
 
 ### 2.  images to demonstrate how your pipeline is working.
 
 Here is the entire pipeline:
-
 
 1. Crop ROI regions
 2. Color conversion
@@ -81,19 +93,32 @@ Here is the entire pipeline:
 
 Repeat 1-7 until all windows are examined.
 
-![alt text][image4]
+![alt text][image5]
 
 ### 3. Corresponding Heatmap from Above Six Frames:
-To reduce false positives, and integrate multiple detection, the idea of heatmap is introduced. In the heatmap, each detected result of bounding boxes are incremented, and then, thresholding is done to eliminate noisy detection.
+To reduce false positives, I utilized the thesholding in SVN output.
+Even the windowed image is detected as <b>vehicle</b>, some might need to be ignored when the classification result is too close to decision boundary.
 
-Below figure is the heatmap of detection result.
+```
+test_prediction = int(svc.decision_function(test_features) > svn_thresh)
+```
 
-![alt text][image5]
+And then, I used the idea of heatmapping. By incrementing each result of overwrapped sliding window, and then, thresholding is done to eliminate noisy detection.
+
+Additionally, I introduced simple filtering algorithm to 
+Below figure is the heatmap of detection result. This filtering is not included in the figure below (only applicable for sequencial images like video)
+
+```
+self.heatmap = self.heatmap // 2
+self.heatmap = add_heat(heat, bboxes) // 2
+```
+
+![alt text][image6]
 
 ### 4. Here the resulting bounding boxes:
 Based on heatmap, resulting bounding box is calculated as below:
 
-![alt text][image6]
+![alt text][image7]
 
 
 ---
@@ -101,9 +126,30 @@ Based on heatmap, resulting bounding box is calculated as below:
 ## Video Implementation
 
 ### 1. Process Against Sequencial Video
-<b>Sorry, still under implementation</b>
+In the video sequence, we introduce `Heatmap` class for filtering against sequencial video. The reason is simply to apply filtering to reduce false positive detection.
 
-In the video sequence, we introduce `Heatmap` class for filtering against sequencial video.
+```
+class HeatMap():
+    def __init__(self, img, threshold):        
+        self.heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.draw_img = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.threshold = threshold
+    def update(self, img, bboxes):
+        # Add heat to each box in box list        
+        heat = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.heatmap = self.heatmap // 2
+        self.heatmap = add_heat(heat, bboxes) // 2
+        # Apply threshold to help remove false positives
+        self.heatmap = apply_threshold(self.heatmap, self.threshold)
+        # Find final boxes from heatmap using label function
+        self.labels = label(self.heatmap)
+    def get_heatmap(self):
+        return self.heatmap
+    def get_labels(self):
+        return self.labels
+    def get_draw_img(self):
+        return self.draw_img
+ ```
 
 
 ### 2. Filter for False Positives and Duplicated Detections
@@ -119,7 +165,4 @@ Here's a [link to my video result](./output.mp4)
 
 ### Discussion
 
-Now the problem is:
-
-* Shadows are mis-detected as vehicles.
-* Bounding box for the vehicle is not stable.
+I tried several approaches to reduce false positive detection, but still there is a misdetection for shadowed region.

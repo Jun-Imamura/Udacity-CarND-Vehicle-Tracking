@@ -1060,10 +1060,12 @@ MathJax.Hub.Config({
 <p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/HOG.png" /></p>
 <hr />
 <h3 id="2-final-choice-of-hog-parameters"><a name="user-content-2-final-choice-of-hog-parameters" href="#2-final-choice-of-hog-parameters" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>2. Final choice of HOG parameters.</h3>
-<p>I chose following HOG parameters</p>
-<pre><code>orient = 9
+<p>I tried some combination of these parameters, and decided to use followings:<br />
+Color space was chosen by comparing SVN test set error.</p>
+<pre><code>orient = 10
 pix_per_cell = 8
 cell_per_block = 2
+color_space = 'HSV'
 </code></pre>
 
 <hr />
@@ -1071,10 +1073,17 @@ cell_per_block = 2
 <p>I trained a linear SVM using spatial feature, color histogram and HOG features for HSV color space.<br />
 Then, I did normalization. Below figure is the example feature vector for one image.</p>
 <p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/features.png" /></p>
+<p>When I applied SVM with default parameter, train accuracy was 1.0, which seems overfitting. So I decided to reduce the parameter <code>C</code> to avoid this (the parameter is related to decision boundary shape). And the parameter <code>C=0.00003</code> seems good to balance between train error and test error.</p>
 <hr />
 <h2 id="sliding-window-search"><a name="user-content-sliding-window-search" href="#sliding-window-search" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Sliding Window Search</h2>
 <h3 id="1-sliding-window-search-algorithm-and-parameter-exploration"><a name="user-content-1-sliding-window-search-algorithm-and-parameter-exploration" href="#1-sliding-window-search-algorithm-and-parameter-exploration" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>1. Sliding Window Search Algorithm and Parameter Exploration</h3>
-<p>I scaled input image to $1/1.5$, for optimization. And window size is fixed to 64.</p>
+<p>I used multi-scale window sliding, with scaling image and fixed window size.<br />
+ROI is also chosen along with the scale size, because the vehicle in far region is captured upper (close to vanishing point) in the image plane.</p>
+<pre><code>scales = [1.0, 1.5, 2.0]
+yranges = [(400, 500),(400, 550), (400, 600)]
+</code></pre>
+
+<p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/sliding_window.png" /></p>
 <h3 id="2-images-to-demonstrate-how-your-pipeline-is-working"><a name="user-content-2-images-to-demonstrate-how-your-pipeline-is-working" href="#2-images-to-demonstrate-how-your-pipeline-is-working" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>2.  images to demonstrate how your pipeline is working.</h3>
 <p>Here is the entire pipeline:</p>
 <ol>
@@ -1089,8 +1098,18 @@ Then, I did normalization. Below figure is the example feature vector for one im
 <p>Repeat 1-7 until all windows are examined.</p>
 <p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/DetectionResult.png" /></p>
 <h3 id="3-corresponding-heatmap-from-above-six-frames"><a name="user-content-3-corresponding-heatmap-from-above-six-frames" href="#3-corresponding-heatmap-from-above-six-frames" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>3. Corresponding Heatmap from Above Six Frames:</h3>
-<p>To reduce false positives, and integrate multiple detection, the idea of heatmap is introduced. In the heatmap, each detected result of bounding boxes are incremented, and then, thresholding is done to eliminate noisy detection.</p>
-<p>Below figure is the heatmap of detection result.</p>
+<p>To reduce false positives, I utilized the thesholding in SVN output.<br />
+Even the windowed image is detected as <b>vehicle</b>, some might need to be ignored when the classification result is too close to decision boundary.</p>
+<pre><code>test_prediction = int(svc.decision_function(test_features) &gt; svn_thresh)
+</code></pre>
+
+<p>And then, I used the idea of heatmapping. By incrementing each result of overwrapped sliding window, and then, thresholding is done to eliminate noisy detection.</p>
+<p>Additionally, I introduced simple filtering algorithm to <br />
+Below figure is the heatmap of detection result. This filtering is not included in the figure below (only applicable for sequencial images like video)</p>
+<pre><code>self.heatmap = self.heatmap // 2
+self.heatmap = add_heat(heat, bboxes) // 2
+</code></pre>
+
 <p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/heatmap.png" /></p>
 <h3 id="4-here-the-resulting-bounding-boxes"><a name="user-content-4-here-the-resulting-bounding-boxes" href="#4-here-the-resulting-bounding-boxes" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>4. Here the resulting bounding boxes:</h3>
 <p>Based on heatmap, resulting bounding box is calculated as below:</p>
@@ -1098,16 +1117,31 @@ Then, I did normalization. Below figure is the example feature vector for one im
 <hr />
 <h2 id="video-implementation"><a name="user-content-video-implementation" href="#video-implementation" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Video Implementation</h2>
 <h3 id="1-process-against-sequencial-video"><a name="user-content-1-process-against-sequencial-video" href="#1-process-against-sequencial-video" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>1. Process Against Sequencial Video</h3>
-<p><b>Sorry, still under implementation</b></p>
-<p>In the video sequence, we introduce <code>Heatmap</code> class for filtering against sequencial video.</p>
+<p>In the video sequence, we introduce <code>Heatmap</code> class for filtering against sequencial video. The reason is simply to apply filtering to reduce false positive detection.</p>
+<p><code>class HeatMap():
+    def __init__(self, img, threshold):        
+        self.heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.draw_img = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.threshold = threshold
+    def update(self, img, bboxes):
+        # Add heat to each box in box list        
+        heat = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.heatmap = self.heatmap // 2
+        self.heatmap = add_heat(heat, bboxes) // 2
+        # Apply threshold to help remove false positives
+        self.heatmap = apply_threshold(self.heatmap, self.threshold)
+        # Find final boxes from heatmap using label function
+        self.labels = label(self.heatmap)
+    def get_heatmap(self):
+        return self.heatmap
+    def get_labels(self):
+        return self.labels
+    def get_draw_img(self):
+        return self.draw_img</code></p>
 <h3 id="2-filter-for-false-positives-and-duplicated-detections"><a name="user-content-2-filter-for-false-positives-and-duplicated-detections" href="#2-filter-for-false-positives-and-duplicated-detections" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>2. Filter for False Positives and Duplicated Detections</h3>
 <p>I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used <code>scipy.ndimage.measurements.label()</code> to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  </p>
 <p>Here&rsquo;s an example result showing the heatmap from a series of frames of video, the result of <code>scipy.ndimage.measurements.label()</code> and the bounding boxes then overlaid on the last frame of video:</p>
 <p>Here&rsquo;s a <a href="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output.mp4">link to my video result</a></p>
 <hr />
 <h3 id="discussion"><a name="user-content-discussion" href="#discussion" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Discussion</h3>
-<p>Now the problem is:</p>
-<ul>
-<li>Shadows are mis-detected as vehicles.</li>
-<li>Bounding box for the vehicle is not stable.</li>
-</ul></article></body></html>
+<p>I tried several approaches to reduce false positive detection, but still there is a misdetection for shadowed region.</p></article></body></html>
