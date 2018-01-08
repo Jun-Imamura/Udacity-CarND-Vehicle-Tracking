@@ -1113,12 +1113,12 @@ self.heatmap = add_heat(heat, bboxes) // 2
 <p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/heatmap.png" /></p>
 <h3 id="4-here-the-resulting-bounding-boxes"><a name="user-content-4-here-the-resulting-bounding-boxes" href="#4-here-the-resulting-bounding-boxes" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>4. Here the resulting bounding boxes:</h3>
 <p>Based on heatmap, resulting bounding box is calculated as below:</p>
-<p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/final_res.png" /></p>
+<p><img alt="alt text" src="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output_images/augment.png" /></p>
 <hr />
 <h2 id="video-implementation"><a name="user-content-video-implementation" href="#video-implementation" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Video Implementation</h2>
 <h3 id="1-process-against-sequencial-video"><a name="user-content-1-process-against-sequencial-video" href="#1-process-against-sequencial-video" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>1. Process Against Sequencial Video</h3>
 <p>In the video sequence, we introduce <code>Heatmap</code> class for filtering against sequencial video. The reason is simply to apply filtering to reduce false positive detection.</p>
-<p><code>class HeatMap():
+<pre><code>class HeatMap():
     def __init__(self, img, threshold):        
         self.heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
         self.draw_img = np.zeros_like(img[:,:,0]).astype(np.float)
@@ -1137,11 +1137,66 @@ self.heatmap = add_heat(heat, bboxes) // 2
     def get_labels(self):
         return self.labels
     def get_draw_img(self):
-        return self.draw_img</code></p>
-<h3 id="2-filter-for-false-positives-and-duplicated-detections"><a name="user-content-2-filter-for-false-positives-and-duplicated-detections" href="#2-filter-for-false-positives-and-duplicated-detections" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>2. Filter for False Positives and Duplicated Detections</h3>
-<p>I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used <code>scipy.ndimage.measurements.label()</code> to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  </p>
-<p>Here&rsquo;s an example result showing the heatmap from a series of frames of video, the result of <code>scipy.ndimage.measurements.label()</code> and the bounding boxes then overlaid on the last frame of video:</p>
-<p>Here&rsquo;s a <a href="///C://Users/imach/Desktop/Udacity/CarND-Vehicle-Detection/output.mp4">link to my video result</a></p>
-<hr />
-<h3 id="discussion"><a name="user-content-discussion" href="#discussion" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Discussion</h3>
-<p>I tried several approaches to reduce false positive detection, but still there is a misdetection for shadowed region.</p></article></body></html>
+        return self.draw_img
+ ```
+
+
+### 2. Filter for False Positives and Duplicated Detections
+
+I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+
+Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+
+Here's a [link to my video result](./output.mp4)
+
+
+---
+
+### Discussion
+It was not a easy task to create robust implementation. Here some method I utilized.
+
+#### Data Augmentation
+I did image augmentation to avoid overfitting. Here's the code which I used.
+
+```python
+import scipy.ndimage
+def create_variant(image):
+    if (random.choice([1, 0])):
+        image = scipy.ndimage.interpolation.shift(input=image, shift=[random.randrange(-3, 3), random.randrange(-3, 3), 0])
+    else:
+        image = scipy.ndimage.interpolation.rotate(input=image, angle = random.randrange(-8, 8), reshape=False)
+    return image
+</code></pre>
+
+<p>![alt text][image8]</p>
+<h4 id="filtering-using-heatmap-class"><a name="user-content-filtering-using-heatmap-class" href="#filtering-using-heatmap-class" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Filtering Using Heatmap Class</h4>
+<p>In order to reject unstable detection result, I defined filtering method using previous detection result.<br />
+Basically, detected vehicles won&rsquo;t move so fast within the image coordinates, so the filtering doesn&rsquo;t have too much side-effect.</p>
+<pre><code class="python">class HeatMap():
+    def __init__(self, img, threshold):        
+        self.heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.output = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.draw_img = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.threshold = threshold
+        self.counter = 0
+    def update(self, img, bboxes):
+        heat = np.zeros_like(img[:,:,0]).astype(np.float)
+        # Add heat to each box in box list 
+        self.heatmap *= 0.5       
+        self.heatmap += (add_heat(heat, bboxes) * 0.5)
+        # Apply threshold to help remove false positives
+        self.output = apply_threshold(self.heatmap, self.threshold)
+        # Find final boxes from heatmap using label function
+        self.labels = label(self.output)
+</code></pre>
+
+<h4 id="thresholding-for-svn"><a name="user-content-thresholding-for-svn" href="#thresholding-for-svn" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Thresholding for SVN</h4>
+<p>Ouput of the SVN algorithm has the distance between hyperplane and data point.<br />
+So we can reject few likelihood data using thresholding.</p>
+<pre><code class="python">svn_thresh = 1.0
+</code></pre>
+
+<h3 id="where-my-pipeline-likely-fails"><a name="user-content-where-my-pipeline-likely-fails" href="#where-my-pipeline-likely-fails" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>Where my pipeline likely fails&hellip;</h3>
+<p>Light colored road surface tends to be mis-detected as vehicles.</p>
+<h3 id="what-could-we-do-to-make-it-more-robust"><a name="user-content-what-could-we-do-to-make-it-more-robust" href="#what-could-we-do-to-make-it-more-robust" class="headeranchor-link" aria-hidden="true"><span class="headeranchor"></span></a>What could we do to make it more robust</h3>
+<p>It seems I need more data taken in various condition.</p></article></body></html>

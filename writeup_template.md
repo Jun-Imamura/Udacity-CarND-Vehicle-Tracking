@@ -16,7 +16,8 @@
 [image5]: ./output_images/DetectionResult.png
 [image6]: ./output_images/heatmap.png
 [image7]: ./output_images/final_res.png
-[video1]: ./project_video.mp4
+[image7]: ./output_images/augment.png
+[video1]: ./output.mp4
 
 Here is the [Rubric](https://review.udacity.com/#!/rubrics/513/view) points for this project.
 
@@ -164,5 +165,58 @@ Here's a [link to my video result](./output.mp4)
 ---
 
 ### Discussion
+It was not a easy task to create robust implementation. Here some method I utilized.
 
-I tried several approaches to reduce false positive detection, but still there is a misdetection for shadowed region.
+#### Data Augmentation
+I did image augmentation to avoid overfitting. Here's the code which I used.
+
+```python
+import scipy.ndimage
+def create_variant(image):
+    if (random.choice([1, 0])):
+        image = scipy.ndimage.interpolation.shift(input=image, shift=[random.randrange(-3, 3), random.randrange(-3, 3), 0])
+    else:
+        image = scipy.ndimage.interpolation.rotate(input=image, angle = random.randrange(-8, 8), reshape=False)
+    return image
+```
+
+
+![alt text][image8]
+
+#### Filtering Using Heatmap Class
+In order to reject unstable detection result, I defined filtering method using previous detection result.
+Basically, detected vehicles won't move so fast within the image coordinates, so the filtering doesn't have too much side-effect.
+
+```python
+class HeatMap():
+    def __init__(self, img, threshold):        
+        self.heatmap = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.output = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.draw_img = np.zeros_like(img[:,:,0]).astype(np.float)
+        self.threshold = threshold
+        self.counter = 0
+    def update(self, img, bboxes):
+        heat = np.zeros_like(img[:,:,0]).astype(np.float)
+        # Add heat to each box in box list 
+        self.heatmap *= 0.5       
+        self.heatmap += (add_heat(heat, bboxes) * 0.5)
+        # Apply threshold to help remove false positives
+        self.output = apply_threshold(self.heatmap, self.threshold)
+        # Find final boxes from heatmap using label function
+        self.labels = label(self.output)
+```
+
+#### Thresholding for SVN
+Ouput of the SVN algorithm has the distance between hyperplane and data point.
+So we can reject few likelihood data using thresholding.
+
+```python
+svn_thresh = 1.0
+```
+
+
+### Where my pipeline likely fails...
+Light colored road surface tends to be mis-detected as vehicles.
+
+### What could we do to make it more robust
+It seems I need more data taken in various condition.
